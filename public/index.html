@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTMfy Dashboard — Sales & ROAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --card-bg: #111111;
+            --border: #222222;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Login Screen */
+        #login-view {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #1e1e1e 0%, #0a0a0a 100%);
+        }
+
+        .login-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .login-card h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .login-card p {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 1rem;
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            color: #fff;
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+        }
+
+        button {
+            width: 100%;
+            padding: 1rem;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        /* Dashboard View */
+        #dashboard-view {
+            display: none;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            background: var(--card-bg);
+            padding: 0.25rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+        }
+
+        .btn-period {
+            padding: 0.5rem 1.25rem;
+            border-radius: 0.5rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-period.active {
+            background: var(--border);
+            color: #fff;
+        }
+
+        /* Summary Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card .label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .stat-card.accent::after {
+            content: '';
+            position: absolute;
+            top: 0; right: 0; bottom: 0; width: 4px;
+            background: var(--accent);
+        }
+
+        /* Tables */
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .card-title .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent);
+            display: inline-block;
+        }
+
+        .data-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 1.25rem 1rem;
+            font-size: 0.95rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .roas-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+
+        .roas-high { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+        .roas-mid { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+        .roas-low { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+
+        .loading-shimmer {
+            animation: shimmer 1.5s infinite;
+            background: linear-gradient(90deg, var(--card-bg) 25%, #222 50%, var(--card-bg) 75%);
+            background-size: 200% 100%;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Recent Sales */
+        .sale-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sale-item:last-child {
+            border-bottom: none;
+        }
+
+        .sale-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sale-email {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .sale-time {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .sale-amount {
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        @media (max-width: 768px) {
+            header { flex-direction: column; gap: 1.5rem; align-items: flex-start; }
+            .summary-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-view">
+        <div class="login-card">
+            <h1>UTMfy Dashboard</h1>
+            <p>Enter your credentials to access sales data.</p>
+            <input type="password" id="password" placeholder="Password" onkeypress="if(event.key==='Enter') login()">
+            <button onclick="login()" id="login-btn">Sign In</button>
+            <p id="login-error" style="color: var(--danger); margin-top: 1rem; display: none;"></p>
+        </div>
+    </div>
+
+    <div id="dashboard-view">
+        <div class="container">
+            <header>
+                <div class="logo">UTMFY DASHBOARD</div>
+                <div class="controls">
+                    <button class="btn-period" onclick="setPeriod('today')" id="btn-today">Today</button>
+                    <button class="btn-period active" onclick="setPeriod('7d')" id="btn-7d">7 Days</button>
+                    <button class="btn-period" onclick="setPeriod('30d')" id="btn-30d">30 Days</button>
+                </div>
+            </header>
+
+            <div class="summary-grid" id="summary-container">
+                <div class="stat-card accent">
+                    <div class="label">Total Revenue</div>
+                    <div class="value" id="total-revenue">R$ 0,00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Total Spend</div>
+                    <div class="value" id="total-spend">R$ 0,00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Global ROAS</div>
+                    <div class="value" id="total-roas">0.0x</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Total Sales</div>
+                    <div class="value" id="total-sales">0</div>
+                </div>
+            </div>
+
+            <div class="data-card">
+                <h2 class="card-title"><span class="dot"></span> Campaigns Performance</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Campaign</th>
+                                <th>Conjunto</th>
+                                <th>Revenue</th>
+                                <th>Spend (FB)</th>
+                                <th>ROAS</th>
+                                <th>Sales</th>
+                            </tr>
+                        </thead>
+                        <tbody id="campaigns-table">
+                            <!-- Data will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="data-card">
+                <h2 class="card-title"><span class="dot" style="background: var(--success); box-shadow: 0 0 10px var(--success);"></span> Recent Sales</h2>
+                <div id="sales-feed">
+                    <!-- Data will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPeriod = '7d';
+        let refreshInterval = null;
+
+        // Check for existing token
+        const token = localStorage.getItem('utmfy_token');
+        if (token) {
+            showDashboard();
+        }
+
+        async function login() {
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('login-btn');
+            const error = document.getElementById('login-error');
+
+            btn.disabled = true;
+            btn.innerText = 'Checking...';
+            error.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                const data = await res.json();
+                if (data.token) {
+                    localStorage.setItem('utmfy_token', data.token);
+                    showDashboard();
+                } else {
+                    error.innerText = data.error || 'Login failed';
+                    error.style.display = 'block';
+                }
+            } catch (err) {
+                error.innerText = 'Connection error';
+                error.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Sign In';
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('login-view').style.display = 'none';
+            document.getElementById('dashboard-view').style.display = 'block';
+            fetchData();
+            
+            // Auto refresh every 30s
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(fetchData, 30000);
+        }
+
+        function setPeriod(p) {
+            currentPeriod = p;
+            document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${p}`).classList.add('active');
+            fetchData();
+        }
+
+        async function fetchData() {
+            const token = localStorage.getItem('utmfy_token');
+            if (!token) return;
+
+            try {
+                const [campRes, salesRes] = await Promise.all([
+                    fetch(`/api/campaigns?p=${currentPeriod}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`/api/sales?p=${currentPeriod}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                if (campRes.status === 401) return logout();
+
+                const camps = await campRes.json();
+                const sales = await salesRes.json();
+
+                renderDashboard(camps, sales);
+            } catch (err) {
+                console.error('Fetch error:', err);
+            }
+        }
+
+        function renderDashboard(data, sales) {
+            // Summary
+            document.getElementById('total-revenue').innerText = formatCurrency(data.totals.revenue);
+            document.getElementById('total-spend').innerText = formatCurrency(data.totals.spend);
+            document.getElementById('total-roas').innerText = data.totals.roas.toFixed(2) + 'x';
+            document.getElementById('total-sales').innerText = data.totals.sales;
+
+            // Campaigns Table
+            const tbody = document.getElementById('campaigns-table');
+            tbody.innerHTML = data.campaigns.map(c => {
+                const roasClass = c.roas >= 4 ? 'roas-high' : (c.roas >= 2 ? 'roas-mid' : 'roas-low');
+                return `
+                    <tr>
+                        <td style="font-weight: 500;">${c.campaign_name}</td>
+                        <td>
+                            <div style="font-weight: 600;">${c.adset_name}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">${c.adset_id}</div>
+                        </td>
+                        <td style="font-weight: 700;">${formatCurrency(c.revenue)}</td>
+                        <td>${formatCurrency(c.spend)}</td>
+                        <td><span class="roas-badge ${roasClass}">${c.roas.toFixed(2)}x</span></td>
+                        <td>${c.sales}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Sales Feed
+            const feed = document.getElementById('sales-feed');
+            feed.innerHTML = sales.map(s => `
+                <div class="sale-item">
+                    <div class="sale-info">
+                        <span class="sale-email">${s.email}</span>
+                        <span class="sale-time">${new Date(s.created_at).toLocaleString()} • ${s.campaign}</span>
+                    </div>
+                    <div class="sale-amount">${formatCurrency(s.amount, s.currency)}</div>
+                </div>
+            `).join('');
+        }
+
+        function formatCurrency(val, currency = 'BRL') {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(val);
+        }
+
+        function logout() {
+            localStorage.removeItem('utmfy_token');
+            location.reload();
+        }
+    </script>
+</body>
+</html>
