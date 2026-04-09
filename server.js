@@ -73,9 +73,8 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
     const settingsRes = await pool.query('SELECT key, value FROM dashboard_settings WHERE key IN ($1, $2)', ['fb_marketing_token', 'fb_ad_account_id']);
     const settings = Object.fromEntries(settingsRes.rows.map(r => [r.key, r.value]));
     
-    if (!settings.fb_marketing_token) {
-        return res.status(500).json({ error: 'Facebook Marketing Token missing.' });
-    }
+    // We'll proceed even if settings are missing, just won't fetch FB spend
+    const hasFbToken = !!settings.fb_marketing_token;
 
     // 2. Fetch Sales Data
     const dateLimit = period === 'today' ? "CURRENT_DATE" : `NOW() - INTERVAL '${interval}'`;
@@ -119,43 +118,45 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
     });
 
     // 4. Batch Fetch FB Spend
-    const fbToken = settings.fb_marketing_token;
-    const since = getSinceDate(period);
-    const until = new Date().toISOString().split('T')[0];
-
     const spendMap = new Map();
-    const idsToFetch = Array.from(fbIds).filter(id => {
-      const cacheKey = `${id}_${period}`;
-      const cached = spendCache.get(cacheKey);
-      if (cached && (Date.now() - cached.ts < CACHE_TTL)) {
-        spendMap.set(id, cached.spend);
-        return false;
-      }
-      return true;
-    });
+    const fbToken = settings.fb_marketing_token;
 
-    if (idsToFetch.length > 0) {
-      // Facebook allows batching: ?ids=ID1,ID2,ID3
-      // Max 50 IDs per request for sanity
-      const chunks = chunkArray(idsToFetch, 50);
-      for (const chunk of chunks) {
-        try {
-          const fbRes = await axios.get(`https://graph.facebook.com/v19.0/`, {
-            params: {
-              ids: chunk.join(','),
-              fields: 'insights{spend}',
-              time_range: JSON.stringify({ since, until }),
-              access_token: fbToken
-            }
-          });
+    if (hasFbToken) {
+      const since = getSinceDate(period);
+      const until = new Date().toISOString().split('T')[0];
 
-          Object.entries(fbRes.data).forEach(([id, data]) => {
-            const spend = parseFloat(data.insights?.data[0]?.spend || 0);
-            spendMap.set(id, spend);
-            spendCache.set(`${id}_${period}`, { spend, ts: Date.now() });
-          });
-        } catch (err) {
-          console.error(`Error fetching spend for chunk ${chunk}:`, err.response?.data || err.message);
+      const idsToFetch = Array.from(fbIds).filter(id => {
+        const cacheKey = `${id}_${period}`;
+        const cached = spendCache.get(cacheKey);
+        if (cached && (Date.now() - cached.ts < CACHE_TTL)) {
+          spendMap.set(id, cached.spend);
+          return false;
+        }
+        return true;
+      });
+
+      if (idsToFetch.length > 0) {
+        // Facebook allows batching: ?ids=ID1,ID2,ID3
+        const chunks = chunkArray(idsToFetch, 50);
+        for (const chunk of chunks) {
+          try {
+            const fbRes = await axios.get(`https://graph.facebook.com/v19.0/`, {
+              params: {
+                ids: chunk.join(','),
+                fields: 'insights{spend}',
+                time_range: JSON.stringify({ since, until }),
+                access_token: fbToken
+              }
+            });
+
+            Object.entries(fbRes.data).forEach(([id, data]) => {
+              const spend = parseFloat(data.insights?.data[0]?.spend || 0);
+              spendMap.set(id, spend);
+              spendCache.set(`${id}_${period}`, { spend, ts: Date.now() });
+            });
+          } catch (err) {
+            console.error(`Error fetching spend for chunk ${chunk}:`, err.response?.data || err.message);
+          }
         }
       }
     }
