@@ -103,6 +103,8 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
       const adsetName = row.utm_campaign?.split('|')[0]?.trim();
       const campaignName = row.utm_medium?.split('|')[0]?.trim();
 
+      // Collect IDs for FB query (both could be useful)
+      if (adsetId && /^\d+$/.test(adsetId)) fbIds.add(adsetId);
       if (campaignId && /^\d+$/.test(campaignId)) fbIds.add(campaignId);
 
       campaigns.push({
@@ -121,11 +123,14 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
     const spendMap = new Map();
     const fbToken = settings.fb_marketing_token;
 
-    if (hasFbToken) {
+    if (hasFbToken && fbIds.size > 0) {
       const since = getSinceDate(period);
       const until = new Date().toISOString().split('T')[0];
+      const idsArray = Array.from(fbIds);
 
-      const idsToFetch = Array.from(fbIds).filter(id => {
+      console.log(`DEBUG FB IDs: ${idsArray.join(',')} (${period})`);
+
+      const idsToFetch = idsArray.filter(id => {
         const cacheKey = `${id}_${period}`;
         const cached = spendCache.get(cacheKey);
         if (cached && (Date.now() - cached.ts < CACHE_TTL)) {
@@ -136,7 +141,6 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
       });
 
       if (idsToFetch.length > 0) {
-        // Facebook allows batching: ?ids=ID1,ID2,ID3
         const chunks = chunkArray(idsToFetch, 50);
         for (const chunk of chunks) {
           try {
@@ -148,6 +152,8 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
                 access_token: fbToken
               }
             });
+
+            console.log('DEBUG FB Response:', JSON.stringify(fbRes.data));
 
             Object.entries(fbRes.data).forEach(([id, data]) => {
               const spend = parseFloat(data.insights?.data[0]?.spend || 0);
@@ -167,7 +173,8 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
     let totalSales = 0;
 
     campaigns.forEach(c => {
-      c.spend = spendMap.get(c.campaign_id) || 0;
+      // Prioritize Adset spend for specific rows, fallback to Campaign spend
+      c.spend = spendMap.get(c.adset_id) || spendMap.get(c.campaign_id) || 0;
       c.roas = c.spend > 0 ? (c.revenue / c.spend) : 0;
       
       totalRevenue += c.revenue;
