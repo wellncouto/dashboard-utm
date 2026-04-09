@@ -64,20 +64,33 @@ app.post('/api/login', async (req, res) => {
 // GET /api/campaigns
 app.get('/api/campaigns', authenticate, async (req, res) => {
   const period = req.query.p || '7d';
-  let interval = '7 days';
-  if (period === 'today') interval = '0 days';
-  else if (period === '30d') interval = '30 days';
+  
+  // Map period to database and FB API logic
+  let sqlFilter;
+  let datePreset;
+
+  if (period === 'today') {
+    // Current day in Sao Paulo timezone
+    sqlFilter = "timezone('America/Sao_Paulo', created_at)::date = timezone('America/Sao_Paulo', now())::date";
+    datePreset = 'today';
+  } else if (period === '30d') {
+    sqlFilter = "created_at >= NOW() - INTERVAL '30 days'";
+    datePreset = 'last_30d';
+  } else {
+    // Default 7d
+    sqlFilter = "created_at >= NOW() - INTERVAL '7 days'";
+    datePreset = 'last_7d';
+  }
 
   try {
     // 1. Get Settings
-    const settingsRes = await pool.query('SELECT key, value FROM dashboard_settings WHERE key IN ($1, $2)', ['fb_marketing_token', 'fb_ad_account_id']);
+    const settingsRes = await pool.query('SELECT key, value FROM dashboard_settings WHERE key IN ($1, $2, $3)', ['fb_marketing_token', 'fb_ad_account_id', 'password_hash']);
     const settings = Object.fromEntries(settingsRes.rows.map(r => [r.key, r.value]));
     
-    // We'll proceed even if settings are missing, just won't fetch FB spend
     const hasFbToken = !!settings.fb_marketing_token;
+    const adAccountId = settings.fb_ad_account_id;
 
     // 2. Fetch Sales Data
-    const dateLimit = period === 'today' ? "CURRENT_DATE" : `NOW() - INTERVAL '${interval}'`;
     const salesQuery = `
       SELECT 
         utm_campaign, 
@@ -85,7 +98,7 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
         COALESCE(SUM(amount), 0) as revenue,
         COUNT(*) as sales_count
       FROM utm_sales
-      WHERE created_at >= ${dateLimit}
+      WHERE ${sqlFilter}
         AND status IN ('approved', 'paid')
         AND utm_campaign IS NOT NULL
       GROUP BY utm_campaign, utm_medium
@@ -123,13 +136,10 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
     const spendMap = new Map();
     const fbToken = settings.fb_marketing_token;
 
-    if (hasFbToken && fbIds.size > 0) {
-      const since = getSinceDate(period);
-      const until = new Date().toISOString().split('T')[0];
+    if (hasFbToken && fbIds.size > 0 && adAccountId) {
       const idsArray = Array.from(fbIds);
 
-      console.log(`DEBUG FB IDs: ${idsArray.join(',')} (${period})`);
-
+      // Filter out cached IDs
       const idsToFetch = idsArray.filter(id => {
         const cacheKey = `${id}_${period}`;
         const cached = spendCache.get(cacheKey);
@@ -141,27 +151,36 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
       });
 
       if (idsToFetch.length > 0) {
+        // Fetch via Ad Account Insights (More reliable)
         const chunks = chunkArray(idsToFetch, 50);
         for (const chunk of chunks) {
           try {
-            const fbRes = await axios.get(`https://graph.facebook.com/v19.0/`, {
+            console.log(`DEBUG: Fetching ${datePreset} insights via ${adAccountId}`);
+            
+            const fbRes = await axios.get(`https://graph.facebook.com/v19.0/${adAccountId}/insights`, {
               params: {
-                ids: chunk.join(','),
-                fields: 'insights{spend}',
-                time_range: JSON.stringify({ since, until }),
+                level: 'adset', // We fetch at adset level which usually maps to our UTM IDs
+                filtering: JSON.stringify([{
+                  field: 'adset.id',
+                  operator: 'IN',
+                  value: chunk
+                }]),
+                fields: 'spend,adset_id',
+                date_preset: datePreset,
                 access_token: fbToken
               }
             });
 
-            console.log('DEBUG FB Response:', JSON.stringify(fbRes.data));
-
-            Object.entries(fbRes.data).forEach(([id, data]) => {
-              const spend = parseFloat(data.insights?.data[0]?.spend || 0);
-              spendMap.set(id, spend);
-              spendCache.set(`${id}_${period}`, { spend, ts: Date.now() });
-            });
+            if (fbRes.data.data) {
+              fbRes.data.data.forEach(item => {
+                const id = item.adset_id;
+                const spend = parseFloat(item.spend || 0);
+                spendMap.set(id, spend);
+                spendCache.set(`${id}_${period}`, { spend, ts: Date.now() });
+              });
+            }
           } catch (err) {
-            console.error(`Error fetching spend for chunk ${chunk}:`, err.response?.data || err.message);
+            console.error(`Error fetching FB spend:`, err.response?.data || err.message);
           }
         }
       }
@@ -201,16 +220,21 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
 // GET /api/sales
 app.get('/api/sales', authenticate, async (req, res) => {
   const period = req.query.p || '7d';
-  let interval = '7 days';
-  if (period === 'today') interval = '0 days';
-  else if (period === '30d') interval = '30 days';
+  let sqlFilter;
+
+  if (period === 'today') {
+    sqlFilter = "timezone('America/Sao_Paulo', created_at)::date = timezone('America/Sao_Paulo', now())::date";
+  } else if (period === '30d') {
+    sqlFilter = "created_at >= NOW() - INTERVAL '30 days'";
+  } else {
+    sqlFilter = "created_at >= NOW() - INTERVAL '7 days'";
+  }
 
   try {
-    const dateLimit = period === 'today' ? "CURRENT_DATE" : `NOW() - INTERVAL '${interval}'`;
     const query = `
       SELECT order_id, email, amount, currency, utm_campaign, created_at
       FROM utm_sales
-      WHERE created_at >= ${dateLimit}
+      WHERE ${sqlFilter}
       ORDER BY created_at DESC
       LIMIT 20;
     `;
