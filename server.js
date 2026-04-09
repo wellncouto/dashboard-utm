@@ -85,10 +85,14 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
   try {
     // 1. Get Settings
     const settingsRes = await pool.query('SELECT key, value FROM dashboard_settings WHERE key IN ($1, $2, $3)', ['fb_marketing_token', 'fb_ad_account_id', 'password_hash']);
-    const settings = Object.fromEntries(settingsRes.rows.map(r => [r.key, r.value]));
+    const settings = Object.fromEntries(settingsRes.rows.map(r => [r.key, r.value.trim()]));
     
     const hasFbToken = !!settings.fb_marketing_token;
     const adAccountId = settings.fb_ad_account_id;
+
+    if (hasFbToken) {
+      console.log(`DEBUG Token Check: Length=${settings.fb_marketing_token.length}, EndsWith=...${settings.fb_marketing_token.slice(-4)}`);
+    }
 
     // 2. Fetch Sales Data
     const salesQuery = `
