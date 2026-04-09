@@ -186,8 +186,8 @@ app.get('/api/campaigns', authenticate, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Error in /api/campaigns:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error in /api/campaigns:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 

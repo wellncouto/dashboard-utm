@@ -447,6 +447,13 @@
                 const camps = await campRes.json();
                 const sales = await salesRes.json();
 
+                if (camps.error) {
+                    console.error('Server error:', camps.error);
+                    // Show error in a non-blocking way if possible, or just log it
+                    document.getElementById('total-revenue').innerText = 'Error';
+                    return;
+                }
+
                 renderDashboard(camps, sales);
             } catch (err) {
                 console.error('Fetch error:', err);
